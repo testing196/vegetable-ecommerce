@@ -6,7 +6,7 @@ import { useEffect } from "react"
 const PAYPAL_BUTTONS_CONFIG = [
   {
     productId: 1,
-    paypalButtonId: "ZUTVT4JEXUKUG",
+    paypalButtonId: "6HHPD34LK3GMW",
     productName: "Tomatoes"
   },
   {

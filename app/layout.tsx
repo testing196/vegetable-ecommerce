@@ -34,8 +34,8 @@ html {
         {/* PayPal Cart SDK - Exactly as PayPal suggests */}
         <Script
           // src="https://www.paypal.com/ncp/js/embedded/cart.js"
-          src="https://www.msmaster.qa.paypal.com/ncp/js/embedded/cart.js"
-          data-merchant-id="PRBQR9MAHMDL6"
+          src="https://www.paypalobjects.com/ncp/sb/cart/cart.js"
+          data-merchant-id="UR72V6GE5FWDQ"
           strategy="beforeInteractive"
         />
         
