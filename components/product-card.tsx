@@ -2,6 +2,10 @@
 
 import Image from "next/image"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { ShoppingCart } from "lucide-react"
+import { useCart } from "@/context/cart-context"
+import { toast } from "sonner"
 
 interface Product {
   id: number
@@ -16,8 +20,19 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  // Create unique PayPal button ID for each product
-  const paypalButtonId = `paypal-add-to-cart-${product.id}`
+  const { addItem } = useCart()
+  
+  const handleAddToCart = () => {
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      image: product.image
+    })
+    
+    toast.success(`${product.name} added to cart`)
+  }
 
   return (
     <Card className="bg-card border-border hover:shadow-lg transition-shadow">
@@ -30,8 +45,14 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-lg font-bold text-primary">${product.price.toFixed(2)}</p>
       </CardContent>
       <CardFooter className="p-4 pt-0">
-        {/* PayPal Add to Cart Button - Unique ID for each product */}
-        <div id={paypalButtonId} className="w-full flex-none"></div>
+        <Button 
+          onClick={handleAddToCart}
+          className="w-full"
+          variant="default"
+        >
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          Add to Cart
+        </Button>
       </CardFooter>
     </Card>
   )

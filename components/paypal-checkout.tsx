@@ -1,131 +1,183 @@
-"use client"
+'use client'
 
-import { useEffect, useRef, useState } from "react"
-import { useCart } from "@/components/cart-context"
-import { Loader2 } from "lucide-react"
+import { useState } from 'react'
+// Temporarily commented out PayPal SDK imports
+import { 
+  PayPalScriptProvider, 
+  PayPalButtons,
+  FUNDING 
+} from '@paypal/react-paypal-js'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+
+
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || ''
+const PAYPAL_OPTIONS = {
+  clientId: PAYPAL_CLIENT_ID,
+  currency: 'USD',
+  intent: 'capture'
+}
+
+// Types
+interface Product {
+  id: number
+  name: string
+  price: number
+  quantity: number
+}
 
 interface PayPalCheckoutProps {
-  onSuccess?: (transactionId: string) => void
+  products: Product[]
+  intent?: 'CAPTURE' | 'AUTHORIZE'
+  onSuccess?: (orderData: any) => void
   onError?: (error: any) => void
 }
 
-declare global {
-  interface Window {
-    paypal?: any
-  }
-}
+export function PayPalCheckout({ 
+  products = [], 
+  intent = 'CAPTURE',
+  onSuccess, 
+  onError 
+}: PayPalCheckoutProps) {
+  const [loading, setLoading] = useState(false)
 
-export function PayPalCheckout({ onSuccess, onError }: PayPalCheckoutProps) {
-  const paypalRef = useRef<HTMLDivElement>(null)
-  const { items, total, clearCart } = useCart()
-  const [isLoading, setIsLoading] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
+  // Calculate order total
+  const orderTotal = products.reduce(
+    (sum, product) => sum + product.price * product.quantity, 
+    0
+  ).toFixed(2)
 
-  useEffect(() => {
-    const checkPayPal = () => {
-      if (window.paypal && paypalRef.current) {
-        setIsLoading(false)
-        // Clear any existing PayPal buttons
-        paypalRef.current.innerHTML = ""
+  // Create order via server API
+  const createOrder = async () => {
+    setLoading(true)
+    try {
+      // Format product items for PayPal
+      const items = products.map(product => ({
+        name: product.name,
+        quantity: product.quantity.toString(),
+        unit_amount: {
+          currency_code: 'USD',
+          value: product.price.toFixed(2)
+        }
+      }))
 
-        window.paypal
-          .Buttons({
-            createOrder: (data: any, actions: any) => {
-              setIsProcessing(true)
-              return actions.order.create({
-                purchase_units: [
-                  {
-                    amount: {
-                      value: total.toFixed(2),
-                      currency_code: "USD",
-                      breakdown: {
-                        item_total: {
-                          currency_code: "USD",
-                          value: total.toFixed(2),
-                        },
-                      },
-                    },
-                    description: `VeggieFresh Order - ${items.length} items`,
-                    items: items.map((item) => ({
-                      name: item.name,
-                      unit_amount: {
-                        currency_code: "USD",
-                        value: item.price.toFixed(2),
-                      },
-                      quantity: item.quantity.toString(),
-                    })),
-                  },
-                ],
-              })
-            },
-            onApprove: async (data: any, actions: any) => {
-              try {
-                const details = await actions.order.capture()
-                console.log("Payment completed successfully:", details)
+      const response = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          items,
+          total: orderTotal,
+          intent
+        })
+      })
 
-                // Clear the cart after successful payment
-                clearCart()
-                setIsProcessing(false)
-
-                // Call success callback with transaction ID
-                onSuccess?.(details.id)
-              } catch (error) {
-                console.error("Payment capture error:", error)
-                setIsProcessing(false)
-                onError?.(error)
-              }
-            },
-            onError: (err: any) => {
-              console.error("PayPal error:", err)
-              setIsProcessing(false)
-              onError?.(err)
-            },
-            onCancel: (data: any) => {
-              console.log("Payment cancelled:", data)
-              setIsProcessing(false)
-            },
-            style: {
-              layout: "vertical",
-              color: "gold",
-              shape: "rect",
-              label: "paypal",
-              height: 40,
-            },
-          })
-          .render(paypalRef.current)
-      } else {
-        // PayPal SDK not loaded yet, check again
-        setTimeout(checkPayPal, 100)
+      if (!response.ok) {
+        throw new Error('Failed to create order')
       }
+
+      const orderData = await response.json()
+      return orderData.id
+    } catch (error) {
+      console.error('Error creating order:', error)
+      toast.error('Could not create PayPal order')
+      if (onError) onError(error)
+      throw error
+    } finally {
+      setLoading(false)
     }
-
-    checkPayPal()
-  }, [items, total, clearCart, onSuccess, onError])
-
-  // Don't render if no items in cart
-  if (items.length === 0) {
-    return null
   }
+
+  // Capture payment after approval
+  const onApprove = async (data: any) => {
+    setLoading(true)
+    try {
+      const response = await fetch('/api/paypal/capture-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderID: data.orderID
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to capture order')
+      }
+
+      const orderData = await response.json()
+      
+      // Success notification
+      toast.success('Payment completed successfully!')
+      
+      // Call success callback if provided
+      if (onSuccess) onSuccess(orderData)
+      
+      return orderData
+    } catch (error) {
+      console.error('Error capturing order:', error)
+      toast.error('Payment processing failed')
+      if (onError) onError(error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Simulate PayPal flow with a dummy button
+  // const handleDummyCheckout = async () => {
+  //   try {
+  //     setLoading(true)
+      
+  //     // Step 1: Create order
+  //     const orderId = await createOrder()
+      
+  //     // Step 2: Simulate approval
+  //     console.log('Order created with ID:', orderId)
+      
+  //     // Step 3: Capture the order
+  //     const orderData = await onApprove({ orderID: orderId })
+      
+  //     return orderData
+  //   } catch (error) {
+  //     console.error('Dummy checkout error:', error)
+  //     toast.error('Checkout process failed')
+  //     if (onError) onError(error)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   return (
     <div className="w-full">
-      {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
+      {loading && (
+        <div className="flex justify-center py-4">
+          <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full"></div>
+          <span className="ml-2">Processing payment...</span>
         </div>
       )}
-
-      {isProcessing && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">Processing payment...</span>
-          </div>
-        </div>
-      )}
-
-      <div ref={paypalRef} className="w-full relative" />
+      
+      <PayPalScriptProvider options={PAYPAL_OPTIONS}>
+        <PayPalButtons
+          disabled={loading || products.length === 0}
+          forceReRender={[products, orderTotal]}
+            fundingSource={FUNDING.PAYPAL}
+            style={{
+              layout: 'vertical',
+              shape: 'rect',
+              color: 'blue'
+            }}
+            createOrder={createOrder}
+            onApprove={onApprove}
+            onError={(error) => {
+              console.error('PayPal error:', error)
+              toast.error('PayPal error occurred')
+              if(onError) onError(error)
+              }}
+            />
+      </PayPalScriptProvider>
     </div>
   )
 }

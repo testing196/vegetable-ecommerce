@@ -3,8 +3,7 @@ import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
-import Script from "next/script"
-import { PayPalButtons } from "@/components/paypal-buttons"
+import { CartProvider } from "@/context/cart-context"
 
 export const metadata: Metadata = {
   title: "VeggieFresh - Organic Vegetables",
@@ -29,18 +28,9 @@ html {
         `}</style>
       </head>
       <body>
-        {children}
-        
-        {/* PayPal Cart SDK - Exactly as PayPal suggests */}
-        <Script
-          // src="https://www.paypal.com/ncp/js/embedded/cart.js"
-          src="https://www.paypalobjects.com/ncp/sb/cart/cart.js"
-          data-merchant-id="UR72V6GE5FWDQ"
-          strategy="beforeInteractive"
-        />
-        
-        {/* PayPal Buttons Component - Injects the exact HTML from PayPal image */}
-        <PayPalButtons />
+        <CartProvider>
+          {children}
+        </CartProvider>
       </body>
     </html>
   )
